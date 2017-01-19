@@ -403,6 +403,10 @@ namespace Forex_Strategy_Trader
             {
                 case "btnBuy":
                     {
+                        MessageBoxButtons messButton = MessageBoxButtons.OKCancel;
+                        DialogResult dr = MessageBox.Show("确定要交易吗?", "交易", messButton);
+                        if (dr != DialogResult.OK) return;
+
                         MT4Bridge.OrderType type = MT4Bridge.OrderType.Buy;
                         string symbol     = Data.Symbol;
                         double lots       = NormalizeEntrySize(OperationLots);
@@ -457,6 +461,10 @@ namespace Forex_Strategy_Trader
                     break;
                 case "btnSell":
                     {
+                        MessageBoxButtons messButton = MessageBoxButtons.OKCancel;
+                        DialogResult dr = MessageBox.Show("确定要交易吗?", "交易", messButton);
+                        if (dr != DialogResult.OK) return;
+
                         MT4Bridge.OrderType type = MT4Bridge.OrderType.Sell;
                         string symbol     = Data.Symbol;
                         double lots       = NormalizeEntrySize(OperationLots);

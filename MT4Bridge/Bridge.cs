@@ -6,6 +6,7 @@
 
 using System;
 using System.IO;
+using System.Windows.Forms;
 
 namespace MT4Bridge
 {
@@ -76,6 +77,8 @@ namespace MT4Bridge
 
         public delegate void TickEventHandler(object source, TickEventArgs e);
         public event TickEventHandler OnTick;
+
+       
         internal void Tick(string symbol, PeriodType period, DateTime bartime, DateTime time, double bid, double ask, int spread, double tickvalue,
                 double accountBalance, double accountEquity, double accountProfit, double accountFreeMargin,
                 int positionTicket, int positionType, double positionLots, double positionOpenPrice, DateTime positionOpenTime,
@@ -87,8 +90,7 @@ namespace MT4Bridge
                     accountBalance, accountEquity, accountProfit, accountFreeMargin,
                     positionTicket, positionType, positionLots, positionOpenPrice, positionOpenTime,
                     positionStopLoss, positionTakeProfit, positionProfit, positionComment);
-
-                OnTick.BeginInvoke(this, tickea, null, null);
+                              OnTick.BeginInvoke(this, tickea, null, null);
             }
         }
 
