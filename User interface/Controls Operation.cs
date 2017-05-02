@@ -203,7 +203,7 @@ namespace Forex_Strategy_Trader
             btnSell.Parent     = pnlHolder;
             btnSell.Image      = Properties.Resources.btn_operation_sell;
             btnSell.ImageAlign = ContentAlignment.MiddleLeft;
-            btnSell.Text       = Language.T("Sell");
+            btnSell.Text       = "停止服务";
             btnSell.Click      += new EventHandler(BtnOperation_Click);
             btnSell.Width      = 145;
             btnSell.Height     = 40;
@@ -211,19 +211,20 @@ namespace Forex_Strategy_Trader
             btnSell.ForeColor  = Color.Crimson;
             btnSell.Location   = new Point(190, 80);
             btnSell.UseVisualStyleBackColor = true;
+            btnSell.Visible = false;
 
             btnBuy = new Button();
             btnBuy.Name       = "btnBuy";
             btnBuy.Parent     = pnlHolder;
             btnBuy.Image      = Properties.Resources.btn_operation_buy;
             btnBuy.ImageAlign = ContentAlignment.MiddleLeft;
-            btnBuy.Text       = Language.T("Buy");
+            btnBuy.Text       = "启动服务";
             btnBuy.Click     += new EventHandler(BtnOperation_Click);
-            btnBuy.Width      = 145;
-            btnBuy.Height     = 40;
+            btnBuy.Width      = 245;
+            btnBuy.Height     = 80;
             btnBuy.Font       = new Font(Font.FontFamily, 16);
             btnBuy.ForeColor  = Color.Green;
-            btnBuy.Location   = new Point(340, 80);
+            btnBuy.Location   = new Point(240, 80);
             btnBuy.UseVisualStyleBackColor = true;
 
             btnClose = new Button();
@@ -239,6 +240,7 @@ namespace Forex_Strategy_Trader
             btnClose.ForeColor  = Color.DarkOrange;
             btnClose.Location   = new Point(190, 126);
             btnClose.UseVisualStyleBackColor = true;
+            btnClose.Visible = false;
 
             btnModify = new Button();
             btnModify.Name       = "btnModify";
@@ -251,6 +253,7 @@ namespace Forex_Strategy_Trader
             btnModify.Width      = 295;
             btnModify.Location   = new Point(190, 172);
             btnModify.UseVisualStyleBackColor = true;
+            btnModify.Visible = false;
 
             tickChart = new Tick_Chart(Language.T("Tick Chart"));
             tickChart.Parent   = pnlHolder;

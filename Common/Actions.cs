@@ -7,6 +7,7 @@
 using System;
 using System.Drawing;
 using System.IO;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace Forex_Strategy_Trader
@@ -55,6 +56,8 @@ namespace Forex_Strategy_Trader
         /// </summary>
         public Actions()
         {
+           
+
             StartPosition     = FormStartPosition.CenterScreen;
             Size              = new Size(785, 560);
             MinimumSize       = new Size(600, 370);

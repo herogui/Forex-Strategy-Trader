@@ -8,14 +8,28 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 using System.Collections.Generic;
+using System.Net.Sockets;
+using System.Net;
+using System.Text;
+using System.Threading;
+using MT4Bridge;
 
 namespace Forex_Strategy_Trader
 {
     /// <summary>
     /// Class Actions : Controls
     /// </summary>
-    public partial class Actions : Controls
+    public partial class Actions : Controls, IDisposable 
     {
+       
+
+        bool IsRun = true;
+        ~Actions()
+        {
+            IsRun = false;
+            if (td != null) td.Abort();
+            Dispose(false);
+        }
         /// <summary>
         /// Opens the averaging parameters dialog.
         /// </summary>
@@ -385,10 +399,184 @@ namespace Forex_Strategy_Trader
             return;
         }
 
+        int sellOrBuy(int sellOrBuy)
+        {
+            MT4Bridge.OrderType type = MT4Bridge.OrderType.Buy;
+            string symbol = Data.Symbol;
+            double lots = 0.01;
+            double price = Data.Ask;
+            int slippage = Configs.AutoSlippage ? (int)Data.InstrProperties.Spread * 3 : Configs.SlippageEntry;
+
+            int stopLossPips = 0;
+            if (OperationStopLoss > 0 && OperationTrailingStop > 0)
+                stopLossPips = Math.Min(OperationStopLoss, OperationTrailingStop);
+            else
+                stopLossPips = Math.Max(OperationStopLoss, OperationTrailingStop);
+
+            double stopLoss = price - 40.0 / 1000;
+            double TakeProfit = price + 50.0 / 1000;
+
+            if (Configs.PlaySounds)
+                Data.SoundOrderSent.Play();
+
+            string parameters = "TS1=" + OperationTrailingStop + ";BRE=" + OperationBreakEven;
+
+            int response = -1;
+            if(sellOrBuy == 1)
+                response = bridge.OrderSend(symbol, OrderType.Buy, lots, Data.Ask, slippage, 400, 500, parameters);
+            else if(sellOrBuy == 0)
+                response = bridge.OrderSend(symbol, OrderType.Sell, lots, Data.Bid, slippage, 500, 400, parameters);
+
+            if (response >= 0)
+            {
+                Data.AddBarStats(OperationType.Buy, lots, price);
+                Data.WrongStopLoss = 0;
+                Data.WrongTakeProf = 0;
+                Data.WrongStopsRetry = 0;
+            }
+            else
+            {   // Error in operation execution.
+                if (Configs.PlaySounds)
+                    Data.SoundError.Play();
+               
+                Data.WrongStopLoss = stopLossPips;
+                Data.WrongTakeProf = OperationTakeProfit;
+            }
+
+            return response;
+        }
+
+        void RunBuy()
+        {
+            StartListening();
+        }
+        private Socket socket = null;
+        private Thread thread = null;
+        /// 
+        /// 开始监听客户端
+        /// 
+        void StartListening()
+        {
+            try
+            {
+                socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                string serverIp = System.Configuration.ConfigurationManager.AppSettings["serverIp"];
+                string port = System.Configuration.ConfigurationManager.AppSettings["port"];
+                IPAddress ipaddress = IPAddress.Parse(serverIp);
+                IPEndPoint endPoint = new IPEndPoint(IPAddress.Any, int.Parse(port));
+
+                socket.Bind(endPoint);
+                socket.Listen(20);
+
+                thread = new Thread(new ThreadStart(WatchConnection));
+                thread.IsBackground = true;
+                thread.Start();               
+            }
+            catch (System.Exception ex)
+            {
+               
+            }
+        }
+
+        Socket[] socConnection = new Socket[12];
+        private static int clientNum = 0;
+
+        /// <summary>
+        /// 监听客户端发来的请求
+        /// </summary>
+        private void WatchConnection()
+        {
+            while (IsRun)
+            {
+                if (clientNum > socConnection.Length - 1) continue;
+
+                socConnection[clientNum] = socket.Accept();            
+
+                Thread thread = new Thread(new ParameterizedThreadStart(ServerRecMsg));
+                thread.IsBackground = true;
+                thread.Start(socConnection[clientNum]);
+                clientNum++;
+            }
+        }
+
+        /// <summary>
+        /// 接受客户端消息并发送消息
+        /// </summary>
+        /// <param name="socketClientPara"></param>
+        private void ServerRecMsg(object socketClientPara)
+        {
+            Socket socketServer = socketClientPara as Socket;
+            try
+            {
+                while (IsRun)
+                {
+                    byte[] arrServerRecMsg = new byte[1024 * 1024];
+                    int length = socketServer.Receive(arrServerRecMsg);
+
+                    string receiveString = Encoding.UTF8.GetString(arrServerRecMsg, 0, length);
+
+                    int res = -1;
+                    if (receiveString.IndexOf("buy") > -1)
+                    {
+                        //int res = sellOrBuy(1);
+
+                        this.Invoke(new EventHandler(delegate
+                        {
+                            //MessageBoxButtons messButton = MessageBoxButtons.OKCancel;
+                            //DialogResult dr = MessageBox.Show("确定要买入吗?", "交易", messButton);
+                            //if (dr == DialogResult.OK)
+                            {
+                                res = sellOrBuy(1);
+                                //if (res > -1) MessageBox.Show("买入成功！");
+                            }
+                        }));
+                    }
+                    else if (receiveString.IndexOf("sell") > -1)
+                    {
+                        //int res = sellOrBuy(0);
+
+                        this.Invoke(new EventHandler(delegate
+                        {
+                            //MessageBoxButtons messButton = MessageBoxButtons.OKCancel;
+                            //DialogResult dr = MessageBox.Show("确定要卖出吗?", "交易", messButton);
+                            //if (dr == DialogResult.OK)
+                            {
+                                res = sellOrBuy(0);
+                               // if (res > -1) MessageBox.Show("卖出成功！");
+                            }
+                        }));
+                    }
+
+                    string returnMsg = "";
+                    if (res > -1) returnMsg = "ok";
+                    else returnMsg = "no";
+
+                    byte[] arrSendMsg = Encoding.UTF8.GetBytes(returnMsg);
+                    //发送消息到客户端
+                    socketServer.Send(arrSendMsg);
+                }
+            }
+            catch (System.Exception ex)
+            {
+
+            }
+        }
+
+    
+        Thread td;
+    
+        protected override void BtnOperation_Click(object sender, EventArgs e)
+        {
+            Button btn = sender as Button;
+            btn.Enabled = false;
+            td = new Thread(new ThreadStart(RunBuy));
+            td.Start();
+            IsRun = true;
+        }
         /// <summary>
         /// Manual operation execution.
         /// </summary>
-        protected override void BtnOperation_Click(object sender, EventArgs e)
+        protected  void BtnOperation_Click2(object sender, EventArgs e)
         {
             if (!Data.IsConnected)
             {
@@ -403,9 +591,13 @@ namespace Forex_Strategy_Trader
             {
                 case "btnBuy":
                     {
+
+                        
                         MessageBoxButtons messButton = MessageBoxButtons.OKCancel;
-                        DialogResult dr = MessageBox.Show("确定要交易吗?", "交易", messButton);
+                        DialogResult dr = MessageBox.Show("确定要买入吗?", "交易", messButton);
                         if (dr != DialogResult.OK) return;
+
+                     
 
                         MT4Bridge.OrderType type = MT4Bridge.OrderType.Buy;
                         string symbol     = Data.Symbol;
@@ -462,7 +654,7 @@ namespace Forex_Strategy_Trader
                 case "btnSell":
                     {
                         MessageBoxButtons messButton = MessageBoxButtons.OKCancel;
-                        DialogResult dr = MessageBox.Show("确定要交易吗?", "交易", messButton);
+                        DialogResult dr = MessageBox.Show("确定要卖出吗?", "交易", messButton);
                         if (dr != DialogResult.OK) return;
 
                         MT4Bridge.OrderType type = MT4Bridge.OrderType.Sell;
@@ -519,6 +711,10 @@ namespace Forex_Strategy_Trader
                     break;
                 case "btnClose":
                     {
+                        MessageBoxButtons messButton = MessageBoxButtons.OKCancel;
+                        DialogResult dr = MessageBox.Show("确定要平仓吗?", "交易", messButton);
+                        if (dr != DialogResult.OK) return;
+
                         string symbol   = Data.Symbol;
                         double lots     = NormalizeEntrySize(Data.PositionLots);
                         double price    = Data.PositionDirection == PosDirection.Long ? Data.Bid : Data.Ask;
