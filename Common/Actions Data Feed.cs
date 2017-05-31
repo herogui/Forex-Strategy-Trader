@@ -732,6 +732,7 @@ namespace Forex_Strategy_Trader
                         Language.T("Stop Loss") + " {2}, " + Language.T("Take Profit") + " {3}, " + Language.T("Profit") +
                         " {4} " + Data.AccountCurrency, Data.PositionLots, Data.PositionOpenPrice.ToString(format),
                         Data.PositionStopLoss.ToString(format), Data.PositionTakeProfit.ToString(format), Data.PositionProfit.ToString("F2"));
+                
             }
 
             SetPositionInfoText(img, text);
@@ -741,6 +742,8 @@ namespace Forex_Strategy_Trader
                 JournalMessage jmsg = new JournalMessage(icon, DateTime.Now, string.Format(Data.Symbol + " " + Data.PeriodMTStr + " " + text));
                 AppendJournalMessage(jmsg);
             }
+
+            msg = text;
                 
             return;
         }

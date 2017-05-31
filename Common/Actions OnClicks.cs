@@ -400,10 +400,9 @@ namespace Forex_Strategy_Trader
         }
 
         int sellOrBuy(int sellOrBuy)
-        {
-            MT4Bridge.OrderType type = MT4Bridge.OrderType.Buy;
+        {            
             string symbol = Data.Symbol;
-            double lots = 0.01;
+            double lots =  double.Parse((Data.AccountBalance * 0.1*0.001).ToString("#.##"));
             double price = Data.Ask;
             int slippage = Configs.AutoSlippage ? (int)Data.InstrProperties.Spread * 3 : Configs.SlippageEntry;
 
@@ -422,10 +421,16 @@ namespace Forex_Strategy_Trader
             string parameters = "TS1=" + OperationTrailingStop + ";BRE=" + OperationBreakEven;
 
             int response = -1;
-            if(sellOrBuy == 1)
+            if (sellOrBuy == 1)
                 response = bridge.OrderSend(symbol, OrderType.Buy, lots, Data.Ask, slippage, 400, 500, parameters);
-            else if(sellOrBuy == 0)
+            else if (sellOrBuy == 0)
                 response = bridge.OrderSend(symbol, OrderType.Sell, lots, Data.Bid, slippage, 500, 400, parameters);
+            else if (sellOrBuy == 2)//平仓
+            {
+               bool isok= DoExitTrade();
+           
+               if (isok) return 1;
+            }
 
             if (response >= 0)
             {
@@ -445,11 +450,7 @@ namespace Forex_Strategy_Trader
 
             return response;
         }
-
-        void RunBuy()
-        {
-            StartListening();
-        }
+       
         private Socket socket = null;
         private Thread thread = null;
         /// 
@@ -488,14 +489,9 @@ namespace Forex_Strategy_Trader
         {
             while (IsRun)
             {
-                if (clientNum > socConnection.Length - 1) continue;
-
-                socConnection[clientNum] = socket.Accept();            
-
-                Thread thread = new Thread(new ParameterizedThreadStart(ServerRecMsg));
-                thread.IsBackground = true;
-                thread.Start(socConnection[clientNum]);
-                clientNum++;
+                Socket clientSocket = socket.Accept();
+                Thread receiveThread = new Thread(ServerRecMsg);
+                receiveThread.Start(clientSocket); 
             }
         }
 
@@ -506,9 +502,10 @@ namespace Forex_Strategy_Trader
         private void ServerRecMsg(object socketClientPara)
         {
             Socket socketServer = socketClientPara as Socket;
-            try
+
+            while (IsRun)
             {
-                while (IsRun)
+                try
                 {
                     byte[] arrServerRecMsg = new byte[1024 * 1024];
                     int length = socketServer.Receive(arrServerRecMsg);
@@ -516,315 +513,78 @@ namespace Forex_Strategy_Trader
                     string receiveString = Encoding.UTF8.GetString(arrServerRecMsg, 0, length);
 
                     int res = -1;
-                    if (receiveString.IndexOf("buy") > -1)
-                    {
-                        //int res = sellOrBuy(1);
 
-                        this.Invoke(new EventHandler(delegate
+                    if (receiveString.IndexOf("buy") > -1 || receiveString.IndexOf("sell") > -1)
+                    {
+                        if (receiveString.IndexOf("buy") > -1)
                         {
-                            //MessageBoxButtons messButton = MessageBoxButtons.OKCancel;
-                            //DialogResult dr = MessageBox.Show("确定要买入吗?", "交易", messButton);
-                            //if (dr == DialogResult.OK)
-                            {
-                                res = sellOrBuy(1);
-                                //if (res > -1) MessageBox.Show("买入成功！");
-                            }
-                        }));
+                            res = sellOrBuy(1);
+                        }
+                        else if (receiveString.IndexOf("sell") > -1)
+                        {
+                            res = sellOrBuy(0);
+                        }
+
+                        string returnMsg = "";
+                        if (res > -1) returnMsg = "ok";
+                        else returnMsg = "no";
+
+                        byte[] arrSendMsg = Encoding.UTF8.GetBytes(returnMsg);
+                        //发送消息到客户端
+                        socketServer.Send(arrSendMsg);    
                     }
-                    else if (receiveString.IndexOf("sell") > -1)
+                    else if (receiveString.IndexOf("lots") > -1)//获取当前订单状态
                     {
-                        //int res = sellOrBuy(0);
-
-                        this.Invoke(new EventHandler(delegate
-                        {
-                            //MessageBoxButtons messButton = MessageBoxButtons.OKCancel;
-                            //DialogResult dr = MessageBox.Show("确定要卖出吗?", "交易", messButton);
-                            //if (dr == DialogResult.OK)
-                            {
-                                res = sellOrBuy(0);
-                               // if (res > -1) MessageBox.Show("卖出成功！");
-                            }
-                        }));
+                        byte[] arrSendMsg = Encoding.UTF8.GetBytes(msg);
+                        //发送消息到客户端
+                        socketServer.Send(arrSendMsg);  
                     }
 
-                    string returnMsg = "";
-                    if (res > -1) returnMsg = "ok";
-                    else returnMsg = "no";
-
-                    byte[] arrSendMsg = Encoding.UTF8.GetBytes(returnMsg);
-                    //发送消息到客户端
-                    socketServer.Send(arrSendMsg);
+                    //发出消息后退出                   
+                    socketServer.Shutdown(SocketShutdown.Both);
+                    socketServer.Close();
+                    break;
                 }
-            }
-            catch (System.Exception ex)
-            {
 
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                    socketServer.Shutdown(SocketShutdown.Both);
+                    socketServer.Close();
+                    break;
+                }
             }
         }
 
     
         Thread td;
-    
+        private System.Threading.Timer timerClose;
         protected override void BtnOperation_Click(object sender, EventArgs e)
         {
             Button btn = sender as Button;
             btn.Enabled = false;
-            td = new Thread(new ThreadStart(RunBuy));
+            td = new Thread(new ThreadStart(StartListening));
             td.Start();
             IsRun = true;
+
+            timerClose = new System.Threading.Timer(new TimerCallback(timerCall), this, 0, 2000);
+            timerClose.Change(0, 10000);
+
+           // MessageBox.Show(Data.AccountBalance.ToString() + "   " + (Data.AccountBalance * 0.1*0.001).ToString("#.##"));
         }
-        /// <summary>
-        /// Manual operation execution.
-        /// </summary>
-        protected  void BtnOperation_Click2(object sender, EventArgs e)
+
+        
+        void timerCall(object obj)
         {
-            if (!Data.IsConnected)
+            string strDateTime = DateTime.Now.ToLongDateString() + " 23:59:00";
+
+            DateTime closeTime = Convert.ToDateTime(strDateTime);
+
+
+            if (DateTime.Now>closeTime)
             {
-                if (Configs.PlaySounds)
-                    Data.SoundError.Play();
-                return;
+                sellOrBuy(2);  
             }
-
-            Button btn = (Button)sender;
-
-            switch (btn.Name)
-            {
-                case "btnBuy":
-                    {
-
-                        
-                        MessageBoxButtons messButton = MessageBoxButtons.OKCancel;
-                        DialogResult dr = MessageBox.Show("确定要买入吗?", "交易", messButton);
-                        if (dr != DialogResult.OK) return;
-
-                     
-
-                        MT4Bridge.OrderType type = MT4Bridge.OrderType.Buy;
-                        string symbol     = Data.Symbol;
-                        double lots       = NormalizeEntrySize(OperationLots);
-                        double price      = Data.Ask;
-                        int    slippage   = Configs.AutoSlippage ? (int)Data.InstrProperties.Spread * 3 : Configs.SlippageEntry;
-                        
-                        int stopLossPips = 0;
-                        if (OperationStopLoss > 0 && OperationTrailingStop > 0)
-                            stopLossPips = Math.Min(OperationStopLoss, OperationTrailingStop);
-                        else
-                            stopLossPips = Math.Max(OperationStopLoss, OperationTrailingStop);
-
-                        double stoploss   = stopLossPips        > 0 ? Data.Bid - Data.InstrProperties.Point * stopLossPips : 0;
-                        double takeprofit = OperationTakeProfit > 0 ? Data.Bid + Data.InstrProperties.Point * OperationTakeProfit : 0;
-
-                        if (Configs.PlaySounds)
-                            Data.SoundOrderSent.Play();
-
-                        JournalMessage jmsg = new JournalMessage(JournalIcons.OrderBuy, DateTime.Now, string.Format(symbol + " " + Data.PeriodMTStr + " " +
-                            Language.T("An entry order sent") + ": " + Language.T("Buy") + " {0} " + (lots == 1 ? Language.T("lot") : Language.T("lots")) + " " + Language.T("at") + " {1}, " +
-                            Language.T("Stop Loss") + " {2}, " + Language.T("Take Profit") + " {3}", lots, price.ToString(Data.FF), stoploss.ToString(Data.FF), takeprofit.ToString(Data.FF)));
-                        AppendJournalMessage(jmsg);
-
-                        string parameters = "TS1=" + OperationTrailingStop + ";BRE=" + OperationBreakEven;
-
-                        int response = bridge.OrderSend(symbol, type, lots, price, slippage, stopLossPips, OperationTakeProfit, parameters);
-
-                        if (response >= 0)
-                        {
-                            Data.AddBarStats(OperationType.Buy, lots, price);
-                            Data.WrongStopLoss = 0;
-                            Data.WrongTakeProf = 0;
-                            Data.WrongStopsRetry = 0;
-                        }
-                        else
-                        {   // Error in operation execution.
-                            if (Configs.PlaySounds)
-                                Data.SoundError.Play();
-
-                            if (bridge.LastError == 0)
-                                jmsg = new JournalMessage(JournalIcons.Warning, DateTime.Now,
-                                    Language.T("Operation execution") + ": " + Language.T("MetaTrader is not responding!").Replace("MetaTrader", Data.TerminalName));
-                            else
-                                jmsg = new JournalMessage(JournalIcons.Error, DateTime.Now,
-                                    Language.T("MetaTrader failed to execute order! Returned").Replace("MetaTrader", Data.TerminalName) + ": " +
-                                    MT4Bridge.MT4_Errors.ErrorDescription(bridge.LastError));
-                            AppendJournalMessage(jmsg);
-                            Data.WrongStopLoss = stopLossPips;
-                            Data.WrongTakeProf = OperationTakeProfit;
-                        }
-                    }
-                    break;
-                case "btnSell":
-                    {
-                        MessageBoxButtons messButton = MessageBoxButtons.OKCancel;
-                        DialogResult dr = MessageBox.Show("确定要卖出吗?", "交易", messButton);
-                        if (dr != DialogResult.OK) return;
-
-                        MT4Bridge.OrderType type = MT4Bridge.OrderType.Sell;
-                        string symbol     = Data.Symbol;
-                        double lots       = NormalizeEntrySize(OperationLots);
-                        double price      = Data.Bid;
-                        int    slippage   = Configs.AutoSlippage ? (int)Data.InstrProperties.Spread * 3 : Configs.SlippageEntry;
-                        
-                        int stopLossPips = 0;
-                        if (OperationStopLoss > 0 && OperationTrailingStop > 0)
-                            stopLossPips = Math.Min(OperationStopLoss, OperationTrailingStop);
-                        else
-                            stopLossPips = Math.Max(OperationStopLoss, OperationTrailingStop);
-
-                        double stoploss   = stopLossPips       > 0 ? Data.Ask + Data.InstrProperties.Point * stopLossPips : 0;
-                        double takeprofit = OperationTakeProfit > 0 ? Data.Ask - Data.InstrProperties.Point * OperationTakeProfit : 0;
-
-                        if (Configs.PlaySounds)
-                            Data.SoundOrderSent.Play();
-
-                        JournalMessage jmsg = new JournalMessage(JournalIcons.OrderSell, DateTime.Now, string.Format(symbol + " " + Data.PeriodMTStr + " " +
-                            Language.T("An entry order sent") + ": " + Language.T("Sell") + " {0} " + (lots == 1 ? Language.T("lot") : Language.T("lots")) + " " + Language.T("at") + " {1}, " +
-                            Language.T("Stop Loss") + " {2}, " + Language.T("Take Profit") + " {3}", lots, price.ToString(Data.FF), stoploss.ToString(Data.FF), takeprofit.ToString(Data.FF)));
-                        AppendJournalMessage(jmsg);
-
-                        string parameters = "TS1=" + OperationTrailingStop + ";BRE=" + OperationBreakEven;
-
-                        int response = bridge.OrderSend(symbol, type, lots, price, slippage, stopLossPips, OperationTakeProfit, parameters);
-
-                        if (response >= 0)
-                        {
-                            Data.AddBarStats(OperationType.Sell, lots, price);
-                            Data.WrongStopLoss = 0;
-                            Data.WrongTakeProf = 0;
-                            Data.WrongStopsRetry = 0;
-                        }
-                        else
-                        {   // Error in operation execution.
-                            if (Configs.PlaySounds)
-                                Data.SoundError.Play();
-
-                            if (bridge.LastError == 0)
-                                jmsg = new JournalMessage(JournalIcons.Warning, DateTime.Now,
-                                    Language.T("Operation execution") + ": " + Language.T("MetaTrader is not responding!").Replace("MetaTrader", Data.TerminalName));
-                            else
-                                jmsg = new JournalMessage(JournalIcons.Error, DateTime.Now,
-                                    Language.T("MetaTrader failed to execute order! Returned").Replace("MetaTrader", Data.TerminalName) + ": " + 
-                                    MT4Bridge.MT4_Errors.ErrorDescription(bridge.LastError));
-                            AppendJournalMessage(jmsg);
-                            Data.WrongStopLoss = stopLossPips;
-                            Data.WrongTakeProf = OperationTakeProfit;
-                        }
-                    }
-                    break;
-                case "btnClose":
-                    {
-                        MessageBoxButtons messButton = MessageBoxButtons.OKCancel;
-                        DialogResult dr = MessageBox.Show("确定要平仓吗?", "交易", messButton);
-                        if (dr != DialogResult.OK) return;
-
-                        string symbol   = Data.Symbol;
-                        double lots     = NormalizeEntrySize(Data.PositionLots);
-                        double price    = Data.PositionDirection == PosDirection.Long ? Data.Bid : Data.Ask;
-                        int    slippage = Configs.AutoSlippage ? (int)Data.InstrProperties.Spread * 6 : Configs.SlippageExit;
-                        int    ticket   = Data.PositionTicket;
-
-                        if (ticket == 0)
-                        {   // No position.
-                            if (Configs.PlaySounds)
-                                Data.SoundError.Play();
-                            return;
-                        }
-
-                        if (Configs.PlaySounds)
-                            Data.SoundOrderSent.Play();
-
-                        JournalMessage jmsg = new JournalMessage(JournalIcons.OrderClose, DateTime.Now, string.Format(symbol + " " + Data.PeriodMTStr + " " +
-                            Language.T("An exit order sent") + ": " + Language.T("Close") + " {0} " + (lots == 1 ? Language.T("lot") : Language.T("lots")) + " " + 
-                            Language.T("at") + " {1}", lots, price.ToString(Data.FF)));
-                        AppendJournalMessage(jmsg);
-
-                        bool responseOK = bridge.OrderClose(ticket, lots, price, slippage);
-
-                        if (responseOK)
-                            Data.AddBarStats(OperationType.Close, lots, price);
-                        else
-                        {
-                            if (Configs.PlaySounds)
-                                Data.SoundError.Play();
-
-                            if (bridge.LastError == 0)
-                                jmsg = new JournalMessage(JournalIcons.Warning, DateTime.Now,
-                                    Language.T("Operation execution") + ": " + Language.T("MetaTrader is not responding!").Replace("MetaTrader", Data.TerminalName));
-                            else
-                                jmsg = new JournalMessage(JournalIcons.Error, DateTime.Now,
-                                    Language.T("MetaTrader failed to execute order! Returned").Replace("MetaTrader", Data.TerminalName) + ": " +
-                                    MT4Bridge.MT4_Errors.ErrorDescription(bridge.LastError));
-                            AppendJournalMessage(jmsg);
-                        }
-                        Data.WrongStopLoss = 0;
-                        Data.WrongTakeProf = 0;
-                        Data.WrongStopsRetry = 0;
-                    }
-                    break;
-                case "btnModify":
-                    {
-                        string symbol = Data.Symbol;
-                        double lots   = NormalizeEntrySize(Data.PositionLots);
-                        double price  = Data.PositionDirection == PosDirection.Long ? Data.Bid : Data.Ask;
-                        int    ticket = Data.PositionTicket;
-                        double sign   = Data.PositionDirection == PosDirection.Long ? 1 : -1;
-
-                        if (ticket == 0)
-                        {   // No position.
-                            if (Configs.PlaySounds)
-                                Data.SoundError.Play();
-                            return;
-                        }
-
-                        if (Configs.PlaySounds)
-                            Data.SoundOrderSent.Play();
-
-                        int stopLossPips = 0;
-                        if (OperationStopLoss > 0 && OperationTrailingStop > 0)
-                            stopLossPips = Math.Min(OperationStopLoss, OperationTrailingStop);
-                        else
-                            stopLossPips = Math.Max(OperationStopLoss, OperationTrailingStop);
-
-                        double stoploss   = stopLossPips       > 0 ? price - sign * Data.InstrProperties.Point * stopLossPips       : 0;
-                        double takeprofit = OperationTakeProfit > 0 ? price + sign * Data.InstrProperties.Point * OperationTakeProfit : 0;
-
-                        JournalMessage jmsg = new JournalMessage(JournalIcons.Recalculate, DateTime.Now, string.Format(symbol + " " + Data.PeriodMTStr + " " +
-                            Language.T("A modify order sent") + ": " + Language.T("Stop Loss") + " {0}, " + Language.T("Take Profit") + " {1}",
-                            stoploss.ToString(Data.FF), takeprofit.ToString(Data.FF)));
-                        AppendJournalMessage(jmsg);
-
-                        string parameters = "TS1=" + OperationTrailingStop + ";BRE=" + OperationBreakEven;
-
-                        bool responseOK = bridge.OrderModify(ticket, price, stopLossPips, OperationTakeProfit, parameters);
-
-                        if (responseOK)
-                        {
-                            Data.AddBarStats(OperationType.Modify, lots, price);
-                            Data.WrongStopLoss = 0;
-                            Data.WrongTakeProf = 0;
-                            Data.WrongStopsRetry = 0;
-                        }
-                        else
-                        {
-                            if (Configs.PlaySounds)
-                                Data.SoundError.Play();
-
-                            if (bridge.LastError == 0)
-                                jmsg = new JournalMessage(JournalIcons.Warning, DateTime.Now,
-                                    Language.T("Operation execution") + ": " + Language.T("MetaTrader is not responding!").Replace("MetaTrader", Data.TerminalName));
-                            else
-                                jmsg = new JournalMessage(JournalIcons.Error, DateTime.Now,
-                                    Language.T("MetaTrader failed to execute order! Returned").Replace("MetaTrader", Data.TerminalName) + ": " +
-                                    MT4Bridge.MT4_Errors.ErrorDescription(bridge.LastError));
-                            AppendJournalMessage(jmsg);
-                            Data.WrongStopLoss = stopLossPips;
-                            Data.WrongTakeProf = OperationTakeProfit;
-                        }
-                    }
-                    break;
-                default:
-                    break;
-            }
-
-            return;
         }
 
         /// <summary>

@@ -7,6 +7,7 @@
 using System;
 using System.Drawing;
 using System.Collections.Generic;
+using System.Windows.Forms;
 
 namespace Forex_Strategy_Trader
 {
@@ -657,7 +658,7 @@ namespace Forex_Strategy_Trader
 
             return takeprofit;
         }
-
+        string msg;
         /// <summary>
         /// Sets and sends an entry order.
         /// </summary>
@@ -740,11 +741,14 @@ namespace Forex_Strategy_Trader
             if (Configs.PlaySounds)
                 Data.SoundOrderSent.Play();
 
+           
+
             JournalMessage jmsg = new JournalMessage(icon, DateTime.Now, string.Format(symbol + " " + Data.PeriodMTStr + " " +
                 Language.T("An entry order sent") + ": " + Language.T(ordDir.ToString()) + " {0} " +
                 (lots == 1 ? Language.T("lot") : Language.T("lots")) + " " + Language.T("at") + " {1}, " +
                 Language.T("Stop Loss") + " {2}, " + Language.T("Take Profit") + " {3}",
                 lots, price.ToString(Data.FF), sStopLoss, sTakeProfit));
+
             AppendJournalMessage(jmsg);
 
             string parameters = OrderParameters();
