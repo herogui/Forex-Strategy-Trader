@@ -24,6 +24,8 @@ namespace Forex_Strategy_Trader
         Tick_Chart    tickChart;
         Color         colorParameter;
 
+        public System.Windows.Forms.WebBrowser webBrowser1;
+
         protected double OperationLots         { get { return (double)nudLots.Value;      } }
         protected int    OperationStopLoss     { get { return (int)nudStopLoss.Value;     } }
         protected int    OperationTakeProfit   { get { return (int)nudTakeProfit.Value;   } }
@@ -226,6 +228,17 @@ namespace Forex_Strategy_Trader
             btnBuy.ForeColor  = Color.Green;
             btnBuy.Location   = new Point(240, 80);
             btnBuy.UseVisualStyleBackColor = true;
+
+            this.webBrowser1 = new System.Windows.Forms.WebBrowser();
+            
+            // 
+            // webBrowser1
+            // 
+            
+            this.webBrowser1.Location = new System.Drawing.Point(500, 500);
+            this.webBrowser1.Name = "webBrowser1";
+            this.webBrowser1.Size = new System.Drawing.Size(100, 100);
+            this.webBrowser1.TabIndex = 0;
 
             btnClose = new Button();
             btnClose.Name       = "btnClose";

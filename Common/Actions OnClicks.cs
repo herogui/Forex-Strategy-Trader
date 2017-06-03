@@ -400,7 +400,9 @@ namespace Forex_Strategy_Trader
         }
 
         int sellOrBuy(int sellOrBuy)
-        {            
+        {
+            if ((Data.AccountBalance * 0.1 * 0.001) == 0) return -1;
+
             string symbol = Data.Symbol;
             double lots =  double.Parse((Data.AccountBalance * 0.1*0.001).ToString("#.##"));
             double price = Data.Ask;
@@ -561,6 +563,8 @@ namespace Forex_Strategy_Trader
         private System.Threading.Timer timerClose;
         protected override void BtnOperation_Click(object sender, EventArgs e)
         {
+            
+
             Button btn = sender as Button;
             btn.Enabled = false;
             td = new Thread(new ThreadStart(StartListening));
@@ -573,19 +577,151 @@ namespace Forex_Strategy_Trader
            // MessageBox.Show(Data.AccountBalance.ToString() + "   " + (Data.AccountBalance * 0.1*0.001).ToString("#.##"));
         }
 
+        bool isLoad = false;
+        List<DateTime> listDt = new List<DateTime>();
+        void webBrowser1_DocumentCompleted(object sender, WebBrowserDocumentCompletedEventArgs e)
+        {
+            //this.webBrowser1.ScriptErrorsSuppressed = true;
+            this.webBrowser1.Document.Window.Error += Window_Error;
+
+            if (!isLoad)
+            {
+                HtmlElement ele = this.webBrowser1.Document.GetElementById("current_data");
+
+                if (null == ele) return;
+                listDt.Clear();                
+
+                HtmlElementCollection eleCol = ele.GetElementsByTagName("tr");
+                foreach (HtmlElement tr in eleCol)
+                {
+                    bool isE = IsEurHigh(tr);
+                    if (isE)//重要性 高
+                    {
+                        HtmlElementCollection eleColTd = tr.GetElementsByTagName("td");
+
+                        foreach (HtmlElement td in eleColTd)
+                        {
+                            DateTime dt = DateTime.Now;
+
+                            bool isTime = DateTime.TryParse(td.InnerText, out dt);
+                            if (isTime)
+                            {
+                                if (dt.Hour < 15) continue;//15点才开始交易
+
+                                if (!listDt.Contains(dt)) listDt.Add(dt);
+                            }
+                            break;//第一列是时间
+                        }
+                    }
+                }
+                isLoad = true;
+                //MessageBox.Show(listDt.Count.ToString());
+            }
+        }
+
+        void Window_Error(object sender, HtmlElementErrorEventArgs e)
+        {
+            e.Handled = true;
+        }
+
+        /// <summary>
+        /// 是否是欧盟的高重要性
+        /// </summary>
+        /// <param name="tr"></param>
+        /// <returns></returns>
+        bool IsEurHigh(HtmlElement tr)
+        {
+            bool isB = false;
+
+            List<string> listEurUSD = new List<string>();
+            listEurUSD.Add("欧盟"); listEurUSD.Add("欧元区"); listEurUSD.Add("美国");
+            listEurUSD.Add("奥地利"); listEurUSD.Add("比利时"); listEurUSD.Add("保加利亚");
+            listEurUSD.Add("塞浦路斯"); listEurUSD.Add("克罗地亚"); listEurUSD.Add("捷克共和国");
+            listEurUSD.Add("丹麦"); listEurUSD.Add("爱沙尼亚"); listEurUSD.Add("芬兰");
+            listEurUSD.Add("法国"); listEurUSD.Add("德国"); listEurUSD.Add("希腊");
+            listEurUSD.Add("匈牙利"); listEurUSD.Add("爱尔兰"); listEurUSD.Add("意大利");
+            listEurUSD.Add("拉脱维亚"); listEurUSD.Add("立陶宛"); listEurUSD.Add("卢森堡");
+            listEurUSD.Add("马耳他"); listEurUSD.Add("荷兰"); listEurUSD.Add("波兰");
+            listEurUSD.Add("葡萄牙"); listEurUSD.Add("罗马尼亚"); listEurUSD.Add("斯洛伐克");
+            listEurUSD.Add("斯洛文尼亚"); listEurUSD.Add("西班牙"); listEurUSD.Add("瑞典");
+
+            if (tr.OuterHtml.IndexOf("red_color_s") > -1)
+            {
+                foreach (string country in listEurUSD)
+                {
+                    if (tr.OuterHtml.IndexOf(country) > -1)
+                    {
+                        isB = true;
+                        break;
+                    }
+                }
+            }
+
+            return isB;
+        }
         
         void timerCall(object obj)
         {
-            string strDateTime = DateTime.Now.ToLongDateString() + " 23:59:00";
+            string strDateTime = DateTime.Now.ToLongDateString() + " 00:29:00";
 
             DateTime closeTime = Convert.ToDateTime(strDateTime);
-
 
             if (DateTime.Now>closeTime)
             {
                 sellOrBuy(2);  
             }
+
+            //数据出现前5分钟 平仓
+            if (this.listDt.Count > 0)
+            {
+                foreach (DateTime kv in this.listDt)
+                {
+                    if ((kv - DateTime.Now).Minutes < 5 && (kv - DateTime.Now).Minutes > 0)
+                    {
+                         
+                          sellOrBuy(2);//平仓
+                          //MessageBox.Show("平仓了");
+                        break;
+                    }
+                }
+            }
+
+            //初始化财经日历
+            if (this.listDt.Count > 0 && this.listDt[0].Month == DateTime.Now.Month && this.listDt[0].Day == DateTime.Now.Day)
+                return; //一天初始化一次
+
+            string strDateTime1 = DateTime.Now.ToLongDateString() + " 15:10:00";
+            string strDateTime2 = DateTime.Now.ToLongDateString() + " 15:15:00";
+
+            //string strDateTime1 = DateTime.Now.ToLongDateString() + " 20:15:00";
+            //string strDateTime2 = DateTime.Now.ToLongDateString() + " 20:59:00";
+
+            DateTime dateTime1 = Convert.ToDateTime(strDateTime1);
+            DateTime dateTime2 = Convert.ToDateTime(strDateTime2);
+            if (DateTime.Now > dateTime1 && DateTime.Now < dateTime2)
+            {
+                this.Invoke(new Action(() =>
+                {
+                    if (this.webBrowser1.ReadyState== WebBrowserReadyState.Complete
+                        ||this.webBrowser1.ReadyState == WebBrowserReadyState.Uninitialized)
+                    {
+                        DateTime nowDt = DateTime.Now;
+                        string monthStr = nowDt.Month > 10 ? nowDt.Month.ToString() : "0" + nowDt.Month.ToString();
+                        string dayStr = nowDt.Day > 10 ? nowDt.Day.ToString() : "0" + nowDt.Day.ToString();
+                        string nowStr = nowDt.Year.ToString() + monthStr + dayStr;
+                        this.webBrowser1.Url = new Uri("http://rl.fx678.com/date/" + nowStr + ".html");
+
+                        isLoad = false;
+                        this.webBrowser1.DocumentCompleted -= webBrowser1_DocumentCompleted;
+                        this.webBrowser1.DocumentCompleted += webBrowser1_DocumentCompleted;
+                    }
+                }));  
+            }
+
+           
         }
+
+        public delegate void Action();
 
         /// <summary>
         /// Use logical groups menu item.
