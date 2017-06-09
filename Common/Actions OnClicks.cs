@@ -426,7 +426,7 @@ namespace Forex_Strategy_Trader
             if (sellOrBuy == 1)
                 response = bridge.OrderSend(symbol, OrderType.Buy, lots, Data.Ask, slippage, 400, 500, parameters);
             else if (sellOrBuy == 0)
-                response = bridge.OrderSend(symbol, OrderType.Sell, lots, Data.Bid, slippage, 500, 400, parameters);
+                response = bridge.OrderSend(symbol, OrderType.Sell, lots, Data.Bid, slippage, 400, 500, parameters);
             else if (sellOrBuy == 2)//平仓
             {
                bool isok= DoExitTrade();
@@ -662,7 +662,7 @@ namespace Forex_Strategy_Trader
         
         void timerCall(object obj)
         {
-            string strDateTime = DateTime.Now.ToLongDateString() + " 00:29:00";
+            string strDateTime = DateTime.Now.ToLongDateString() + " 23:50:00";
 
             DateTime closeTime = Convert.ToDateTime(strDateTime);
 
@@ -670,15 +670,15 @@ namespace Forex_Strategy_Trader
             {
                 sellOrBuy(2);  
             }
-
+           
             //数据出现前5分钟 平仓
             if (this.listDt.Count > 0)
             {
                 foreach (DateTime kv in this.listDt)
                 {
-                    if ((kv - DateTime.Now).Minutes < 5 && (kv - DateTime.Now).Minutes > 0)
+                    if ((kv - DateTime.Now).TotalMinutes < 5 && (kv - DateTime.Now).TotalMinutes > 0)
                     {
-                         
+                        //MessageBox.Show(kv.ToLongTimeString() + "," + DateTime.Now.ToLongTimeString());
                           sellOrBuy(2);//平仓
                           //MessageBox.Show("平仓了");
                         break;
@@ -690,8 +690,8 @@ namespace Forex_Strategy_Trader
             if (this.listDt.Count > 0 && this.listDt[0].Month == DateTime.Now.Month && this.listDt[0].Day == DateTime.Now.Day)
                 return; //一天初始化一次
 
-            string strDateTime1 = DateTime.Now.ToLongDateString() + " 15:10:00";
-            string strDateTime2 = DateTime.Now.ToLongDateString() + " 15:15:00";
+            string strDateTime1 = DateTime.Now.ToLongDateString() + " 00:10:00";
+            string strDateTime2 = DateTime.Now.ToLongDateString() + " 23:15:00";
 
             //string strDateTime1 = DateTime.Now.ToLongDateString() + " 20:15:00";
             //string strDateTime2 = DateTime.Now.ToLongDateString() + " 20:59:00";
