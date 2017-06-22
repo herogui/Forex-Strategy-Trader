@@ -404,7 +404,7 @@ namespace Forex_Strategy_Trader
             if ((Data.AccountBalance * 0.1 * 0.001) == 0) return -1;
 
             string symbol = Data.Symbol;
-            double lots =  double.Parse((Data.AccountBalance * 0.1*0.001).ToString("#.##"));
+            double lots =  double.Parse((Data.AccountBalance * 0.2*0.001).ToString("#.##"));
             double price = Data.Ask;
             int slippage = Configs.AutoSlippage ? (int)Data.InstrProperties.Spread * 3 : Configs.SlippageEntry;
 
@@ -414,8 +414,8 @@ namespace Forex_Strategy_Trader
             else
                 stopLossPips = Math.Max(OperationStopLoss, OperationTrailingStop);
 
-            double stopLoss = price - 40.0 / 1000;
-            double TakeProfit = price + 50.0 / 1000;
+            double stopLoss = price - 20.0 / 1000;
+            double TakeProfit = price + 30.0 / 1000;
 
             if (Configs.PlaySounds)
                 Data.SoundOrderSent.Play();
@@ -424,9 +424,9 @@ namespace Forex_Strategy_Trader
 
             int response = -1;
             if (sellOrBuy == 1)
-                response = bridge.OrderSend(symbol, OrderType.Buy, lots, Data.Ask, slippage, 400, 500, parameters);
+                response = bridge.OrderSend(symbol, OrderType.Buy, lots, Data.Ask, slippage, 250, 300, parameters);
             else if (sellOrBuy == 0)
-                response = bridge.OrderSend(symbol, OrderType.Sell, lots, Data.Bid, slippage, 400, 500, parameters);
+                response = bridge.OrderSend(symbol, OrderType.Sell, lots, Data.Bid, slippage, 250, 300, parameters);
             else if (sellOrBuy == 2)//Æ½²Ö
             {
                bool isok= DoExitTrade();
